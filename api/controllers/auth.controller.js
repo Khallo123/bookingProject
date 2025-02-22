@@ -1,6 +1,6 @@
 import argon2 from 'argon2'
+import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
-import { defaultErrorMessage } from '../constants/constant.js'
 
 export const register = async (req , res)=>{
     try {
@@ -26,7 +26,7 @@ export const register = async (req , res)=>{
         console.log(error)
         res.status(500).json({
             isSuccess: false,
-            message: defaultErrorMessage
+            message: "Something went wrong!"
         })
     }
 }
@@ -53,8 +53,15 @@ export const login = async (req , res)=>{
          
 
         // CHECK THE PASSWORD
+        if(!user.password.startsWith("$argon2")) {
+            res.status(500).json({
+                isSuccess: false,
+                message: "Stored password is not a valid Argon2 hash"
+            })
 
-        const isPasswordValid = await argon2.verify(password, user.password)
+            return
+        }
+        const isPasswordValid = await argon2.verify(user.password, password)
 
         if(!isPasswordValid){
             res.status(401).json({
@@ -64,6 +71,22 @@ export const login = async (req , res)=>{
 
             return
         }
+        
+        // MADE A TOKEN FOR THE USER
+        const age = 1000 * 60 * 60 * 24 * 7
+
+        const token = jwt.sign({
+            id: user.id
+        }, process.env.JWT_SECRET_KEY,
+         {expiresIn: age})
+
+        res.cookie("token", token, {
+            httpOnly: true,
+            maxAge: age,
+        }).status(200).json({
+            isSuccess: true,
+            message: "login successfully!"
+        })
 
         
 
@@ -71,11 +94,14 @@ export const login = async (req , res)=>{
         console.log(error)
         res.status(500).json({
             isSuccess: false,
-            message: defaultErrorMessage
+            message: "Something went wrong!"
         })
     }
 }
 
 export const logout = (req , res)=>{
-    //db oprations
+    res.clearCookie("token").status(200).json({
+        isSuccess: true,
+        message: "Log out successfully!"
+    })
 }
